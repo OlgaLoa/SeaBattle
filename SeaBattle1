@@ -1,0 +1,278 @@
+#1.ВНУТРЕННЯЯ ЛОГИКА ИГРЫ:
+#1.1 класс Точек на поле
+class Dot:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+    def __eq__(self, other):#проверка на равенство точек(что сравниваем, с чем сравниваем)
+        return self.x == other.x and self.y == other.y
+
+    def __repr__(self):#вывод точек в консоль
+        return f"Dot({self.x}, {self.y})"
+
+from random import randint
+#1.2 собственные классы исключений:создаем во внутренней логике, отлавливаем - во внешней
+class BoardException(Exception):# общий класс исключений для нескольких исключений
+    pass
+
+class BoardOutException(BoardException):
+    def __str__(self):# когда игрок стреляет в клетку за пределами поля
+        return "Вы пытаетесь выстрелить за доску!"
+
+class BoardUsedException(BoardException):
+    def __str__(self):# когда игрок стреляет в "стреляную" клетку
+        return "Вы уже стреляли в эту клетку"
+
+class BoardWrongShipException(BoardException):
+    pass
+# класс Корабль
+class Ship:#корабль на игровом поле
+    def __init__(self, bow, l, o):
+        self.bow = bow #точка, где размещен нос корабля
+        self.l = l #длина
+        self.o = o #направление корабля (ориентация) 0 - вертикально, 1 - горизонтально
+        self.lives = l #количество жизней корабля(неподбитых точек)
+
+    @property #т.к. вычисляет свойства
+    def dots(self): #возвращает список всех точек корабля
+        ship_dots = [] #список точек у корабля
+        for i in range(self.l): #проход циклом от 0 до длины корабля -1
+            cur_x = self.bow.x
+            cur_y = self.bow.y
+
+            if self.o == 0: #если вертикальная ориентация
+                cur_x += i #нос корабля + i клетка от носа
+
+            elif self.o == 1: #если горизонтальная ориентация
+                cur_y += i #нос корабля + i клетка от носа
+
+            ship_dots.append(Dot(cur_x, cur_y))
+
+        return ship_dots #получаем список точек
+
+    def shooten(self, shot):
+        return shot in self.dots # True если попали в корабль
+
+#1.3 класс Игровое поле
+class Board: # игровая доска (двумерный список, список кораблей доски, hid, количество живых кораблей)
+    def __init__(self, hid=False, size=6): # (нужно ли скрывать корабли, размер корабля)
+        self.size = size
+        self.hid = hid
+
+        self.count = 0 # кол-во пораженных кораблей
+
+        self.field = [["O"] * size for _ in range(size)] # сетка клеток, где хранится состояние: 0- не занято
+
+        self.busy = [] # занятые клетки кораблем и куда уже стреляли
+        self.ships = [] # список кораблей доски
+
+    def __str__(self):
+        res = "" # записываем всю доску
+        res += "  | 1 | 2 | 3 | 4 | 5 | 6 |"
+        for i, row in enumerate(self.field): # проходим по строкам доски
+            res += f"\n{i + 1} | " + " | ".join(row) + " |" # номер строки + клетка строки
+
+        if self.hid: # выводит доску в консоль в зав-ти от hid (нужно ли скрывать корабли)
+            res = res.replace("■", "O") # если True - заменяем ■ на O
+        return res
+
+    def out(self, d): #True - т. выходит за пределы поля, False - не выходит
+        return not ((0 <= d.x < self.size) and (0 <= d.y < self.size))
+
+
+#1.4 контур корабля и добавление его на доску
+def contour(self, ship, verb=False): #обводит корабль по контуру
+    near = [
+        (-1, -1), (-1, 0), (-1, 1),
+        (0, -1), (0, 0), (0, 1),
+        (1, -1), (1, 0), (1, 1)
+    ]
+    for d in ship.dots: #"." вокруг кораблей, когда реальная игра; а когда расставляем корабли, то дост-но занести в список busy
+        for dx, dy in near:
+            cur = Dot(d.x + dx, d.y + dy)
+            if not (self.out(cur)) and cur not in self.busy: #если не выходит за границы доски и если не занята клеточка
+                if verb:
+                    self.field[cur.x][cur.y] = "." #ставим ".", т.е. занято
+                self.busy.append(cur) #добавляем в список
+
+
+def add_ship(self, ship): # ставим корабль на доску
+    for d in ship.dots:
+        if self.out(d) or d in self.busy: # если выход за границы или занята
+            raise BoardWrongShipException() #выбрасываем исключение
+    for d in ship.dots: #ставим в каждую из точек "■"
+        self.field[d.x][d.y] = "■"
+        self.busy.append(d) #записываем точки в список занятых (точки корабля и соседние)
+
+    self.ships.append(ship) #список собственных кораблей
+    self.contour(ship) #обводим по контуру
+
+#1.5 стрельба по доске
+    def shot(self, d): #выстрел по доске
+        if self.out(d): #если попытка за пределы поля
+            raise BoardOutException() #выбрасываем исключение
+
+        if d in self.busy: #если попытка в уже занятую клеточку через in
+            raise BoardUsedException() #выбрасываем исключение
+
+        self.busy.append(d) #теперь т. занята, добавляем в список занятых после удачной стрельбы
+
+        for ship in self.ships: #список по кораблям: принадлежит ли т. к-л кораблю или нет
+            if ship.shooten(d): #если был подстрелен
+                ship.lives -= 1 #уменьшаем кол-во жизней
+                self.field[d.x][d.y] = "X" #ставим Х , где поражен корабль
+                if ship.lives == 0: #если кончились жизни
+                    self.count += 1 #увеличиваем счетчик подбитых кораблей
+                    self.contour(ship, verb=True) #обозначаем контур
+                    print("Корабль уничтожен!")
+                    return False #ход не можем больше делать
+                else:
+                    print("Корабль ранен!") #если количество жизней не равно 0
+                    return True #чтобы повторить ход
+
+        self.field[d.x][d.y] = "." # если корабль не поражен - ставим .
+        print("Мимо!")
+        return False
+
+    def begin(self):
+        self.busy = [] #обнуление списка для хранения, куда стрелял игрок
+
+
+#2.ВНЕШНЯЯ ЛОГИКА ИГРЫ
+#2.1 класс Игрок
+class Player:
+    def __init__(self, board, enemy): #2 доски: своя и врага
+        self.board = board
+        self.enemy = enemy
+
+    def ask(self):#в какую клетку стрелять
+        raise NotImplementedError() #делаем пустым,т.к. нужен ТОЛЬКО для потомков класса
+
+    def move(self): #делаем ход в игре в бесконечном цикле
+        while True: #должен возвр-ть True, если нужен повторный ход
+            try:
+                target = self.ask() # просим координаты
+                repeat = self.enemy.shot(target) #если хорошо, то повторяем ход
+                return repeat
+            except BoardException as e: #если плохо - печатаем исключение
+                print(e)
+#2.2 дочерние классы: Компьютер, Игрок
+class AI(Player): #компьютер
+    def ask(self): #выбор случайной точки
+        d = Dot(randint(0, 5), randint(0, 5)) #случайно генерируем
+        print(f"Ход компьютера: {d.x + 1} {d.y + 1}")
+        return d
+
+
+class User(Player): #игрок
+    def ask(self): #спрашиваем координаты точки из консоли
+        while True:
+            cords = input("Ваш ход: ").split()
+
+            if len(cords) != 2: #проверяем, что 2 координаты введены
+                print(" Введите 2 координаты! ")
+                continue
+
+            x, y = cords
+
+            if not (x.isdigit()) or not (y.isdigit()):  #проверка, что введены числа
+                print(" Введите числа! ")
+                continue
+
+            x, y = int(x), int(y)
+
+            return Dot(x - 1, y - 1) #возвращаем точку (индексация с 0, а пользователю с 1)
+#2.3 класс Игра и генерация досок
+class Game:
+
+# 2.4 конструктор и приветствие
+    def __init__(self, size=6):
+        self.size = size
+        pl = self.random_board() #генерируем доску для игрока
+        co = self.random_board() #генерируем доску для компьютера
+        co.hid = True #скрываем доску для компьютера
+
+        self.ai = AI(co, pl) #создаем игрока-компьютера
+        self.us = User(pl, co) #создаем -игрока
+#передаем доски
+    def try_board(self):#метод пытается создать доску
+#пытаемся в случайные клетки изначально пустой доски расставить
+#корабли в бесконечном цикле while, пока попытка не окажется удачной
+        lens = [3, 2, 2, 1, 1, 1, 1] #список с длиной кораблей
+        board = Board(size=self.size) #доска
+        attempts = 0
+        for l in lens: #пытаемся поставить корабль в бесконечном цикле
+            while True:
+                attempts += 1
+                if attempts > 2000: #если так много попыток расстановки, то доска неудачная, нужно сгенерир-ть новую
+                    return None #возвращаем пустую доску
+                ship = Ship(Dot(randint(0, self.size), randint(0, self.size)), l, randint(0, 1))
+                try:
+                    board.add_ship(ship) #добавление корабля
+                    break #если удачно, то завершаем цикл
+                except BoardWrongShipException: #если исключение , то начинаем итерацию заново (пытаться поставить корабль)
+                    pass
+        board.begin() #подготавливаем к игре доску
+        return board #возвращаем доску
+
+    def random_board(self): # генерируем случайную доску гарантированно
+        board = None #пустая доска
+        while board is None:
+            board = self.try_board() #пытаемся создать доску
+        return board #возвращаем доску
+
+#приветствие пользователя с указанным форматом ввода (столбец, строка)
+    def greet(self):#приветствуем польз-ля и рассказываем о формате ввода
+        print("-------------------")
+        print("  Приветсвуем вас  ")
+        print("      в игре       ")
+        print("    морской бой    ")
+        print("-------------------")
+        print(" формат ввода: x y ")
+        print(" x - номер строки  ")
+        print(" y - номер столбца ")
+
+
+
+
+#2.5 сам игровой цикл
+    def loop(self):
+        num = 0 #номер хода
+        #заводим доски и действуем в зависимости от хода: четный - пользователь ходит, нечетный - компьютер
+        while True:
+            print("-" * 20)
+            print("Доска пользователя:")
+            print(self.us.board)
+            print("-" * 20)
+            print("Доска компьютера:")
+            print(self.ai.board)
+            print("-" * 20)
+            if num % 2 == 0:
+                print("Ходит пользователь!")
+                repeat = self.us.move()  #после-но вызываем move ( отв. за ход игрока), для игроков иделаем проверку:ск-ко живых кораблей осталось на досках, чтобы опр-ть победу
+            else:
+                print("Ходит компьютер!")
+                repeat = self.ai.move() #репит - нужно ли повторить ход:если поразили корабль- можно еще сходить
+            if repeat:
+                num -= 1 #чтобы осталось прежним (ход игрока остался прежним, если попали в корабль)
+
+            if self.ai.board.count == 7:
+                print("-" * 20)
+                print("Пользователь выиграл!")
+                break
+
+            if self.us.board.count == 7:
+                print("-" * 20)
+                print("Компьютер выиграл!")
+                break
+            num += 1
+
+#2.6 метод Старт
+    def start(self): #запуск игры: все вместе совмещает
+        self.greet()
+        self.loop()
+
+#2.7 Запуск игры
+g = Game() #экземпляр класса Game
+g.start() #вызываем метод start для запуска игры
